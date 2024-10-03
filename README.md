@@ -1,29 +1,42 @@
-Initial Data  
-All ​​510,079 firms in Orbis in Germany  
-All 199,854 firms in Kununu in Germany
+This repo processes data from Orbis and Kununu to facilitate a merge based on company names.
+It was developed for Caldwell, Haegele, and Heining (2024). "Firm Pay and Worker Search." (*Working Paper*).
 
-Filtering Data  
-Considered only Orbis firms with more than 30 employees and Kununu firms with more than 10 reviews. This leaves 128,403 Orbis and 38,512 Kununu firms.
+The data-cleaning process is as follows:
 
-Preprocessing Data
+### Loading and Cleaning Data
 
-* Replace umlauts with Latin alphabet characters  
-* Put everything in lowercase  
-* Remove special characters  
-* When two Kununu firms have the same name, keep the one with the most reviews
+1. **Loading and Preprocessing Orbis Data:**
+   - **Rename Columns:** The Orbis dataset columns are renamed according to `orbis_column_map`.
+   - **Clean Employee Data:** Employee numbers are converted to numeric format using `clean_employee_data`.
+   - **Preprocess Company Names:** Company names are cleaned by removing special characters, excess whitespace, and converting to lowercase with `preprocess_company_name`.
+   - **Filter by Company Size:** Companies with fewer than 30 employees are filtered out.
+   - **Remove Duplicates:** Duplicate company names are dropped, retaining only the first instance.
 
-Merging
+2. **Loading and Preprocessing Kununu Data:**
+   - **Sort by Reviews:** The Kununu dataset is sorted by `firm_name` and `total_reviews_num`, with companies having the most reviews prioritized.
+   - **Remove Duplicates:** Duplicates are removed based on `firm_name`, keeping the record with the highest review count.
+   - **Rename Columns:** Columns are renamed using `kununu_column_map`.
+   - **Filter by Reviews:** Companies with fewer than 10 reviews are excluded.
+   - **Preprocess Company Names:** Company names are cleaned similarly to the Orbis dataset.
 
-1. Merge exact matches in names (merges roughly 14,000 firms)  
-2. Change vowels (e.g. replace “ae” with “a”) and merge remaining names (merges roughly 2,100 firms)  
-3. Remove company-type appendices (e.g. “gmbh”) and merge only if there are no other firms with the same name after removing the appendix (merges roughly 1,400 firms). For example, if “heinz ag” and “heinz gmbh” are firms in Orbis, none of these firms will be merged with “heinz” in orbis.
+3. **Sequence of Matching Steps:**
+   - **Exact Match:** An initial attempt to find exact matches between Orbis and Kununu company names.
+   - **Standardize Abbreviations:** Abbreviations in company names are standardized.
+   - **Remove Umlauts:** Umlauts in German company names are converted to their English equivalents.
+   - **Remove Suffixes:** Common suffixes like "GmbH" are removed.
+   - **Remove Common Words:** Frequently appearing words are removed from company names.
 
-So we’ve merged roughly 45% of firms in Kununu.
+### Matching Remaining Firms Using Fuzzy Merge
 
-Fuzzy Merging
+Calculating and filtering fuzzy similarity scores between company names in the Orbis and Kununu datasets, then preparing DataFrame with the best matches for further verification:
 
-* For the remaining firms, compute the [normalized Indel distance](https://maxbachmann.github.io/RapidFuzz/Usage/distance/Indel.html) (i.e. how many characters need to be moved or deleted to get from one name to another, normalized by name length). Exclude appendices (e.g. “gmbh”), as well as common words like “international” from calculation.[^1] Then, manually select between matches that have a score above 95\.  
-  * There are roughly 13,800 potential matches. I estimate about half of these are true matches.  
-  * I also estimate that verifying these matches will very roughly take about 40 hours of work.
+1. **Calculate Similarity Scores:**
+   - **Compute Fuzzy Similarity:** Calculate similarity scores between Orbis and Kununu company names using the `fuzz.QRatio` scorer.
+   - **Filter by Threshold:** Only matches with a similarity score of 90 or higher are retained.
 
-[^1]:  A “common” word is a word that appears more than 40 times across all Orbis and Kununu names. Without removing these words, the “close matches” are filled with companies that share a common word (e.g. “business” or “holding”) but have nothing else in common. 
+2. **Create DataFrame for Best Matches:**
+   - **Create DataFrame:** Include these columns: `Original Orbis Name`, `Original Kununu Name`, `Similarity Score`, `Orbis Name (after preprocessing)`, `Kununu Name (after preprocessing)`, `Orbis ID`, `Kununu ID`, `NACE Code`, `Employees`, and `City`.
+   - **Sort Matches:** The DataFrame is sorted by similarity score (in descending order) and then by Kununu ID (in ascending order).
+
+3. **Translate Kununu Names:**
+   - **Translate to English:** The `Original Kununu Name` is translated to English using the `translate_text` function to assist in verifying matches.
